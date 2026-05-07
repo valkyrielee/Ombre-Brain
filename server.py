@@ -66,10 +66,10 @@ logger = logging.getLogger("ombre_brain")
 # --- Runtime env vars (port + webhook) / 运行时环境变量 ---
 # OMBRE_PORT: HTTP/SSE 监听端口，默认 8000
 try:
-    OMBRE_PORT = int(os.environ.get("OMBRE_PORT", "8000") or "8000")
+    OMBRE_PORT = int(os.environ.get("OMBRE_PORT", "8080") or "8080")
 except ValueError:
-    logger.warning("OMBRE_PORT 不是合法整数，回退到 8000")
-    OMBRE_PORT = 8000
+    logger.warning("OMBRE_PORT 不是合法整数，回退到 8080")
+    OMBRE_PORT = 8080
 
 # OMBRE_HOOK_URL: 在 breath/dream 被调用后推送事件到该 URL（POST JSON）。
 # OMBRE_HOOK_SKIP: 设为 true/1/yes 跳过推送。
@@ -109,7 +109,7 @@ import_engine = ImportEngine(config, bucket_mgr, dehydrator, embedding_engine)  
 mcp = FastMCP(
     "Ombre Brain",
     host="0.0.0.0",
-    port=OMBRE_PORT,
+    port=8080,
 )
 
 
@@ -1949,6 +1949,6 @@ if __name__ == "__main__":
             expose_headers=["*"],
         )
         logger.info("CORS middleware enabled for remote transport / 已启用 CORS 中间件")
-        uvicorn.run(_app, host="0.0.0.0", port=OMBRE_PORT)
+        uvicorn.run(_app, host="0.0.0.0", port=8080)
     else:
         mcp.run(transport=transport)
