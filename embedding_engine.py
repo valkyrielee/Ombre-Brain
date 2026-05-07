@@ -39,7 +39,7 @@ class EmbeddingEngine:
             or "https://generativelanguage.googleapis.com/v1beta/openai/"
         )
         self.model = embed_cfg.get("model", "gemini-embedding-001")
-        self.enabled = bool(self.api_key) and embed_cfg.get("enabled", True)
+        self.enabled = False
 
         # --- SQLite path: buckets_dir/embeddings.db ---
         db_path = os.path.join(config["buckets_dir"], "embeddings.db")
