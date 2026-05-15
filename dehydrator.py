@@ -260,14 +260,14 @@ class Dehydrator:
         # --- Skip dehydration for important/pinned memories ---
         # --- 重要/钉选记忆跳过脱水，保留原文 ---
         if metadata and isinstance(metadata, dict):
-          importance = metadata.get("importance", 5)
-          pinned = metadata.get("pinned", False)
-          try:
-              importance = int(importance)
+            importance = metadata.get("importance", 5)
+            pinned = metadata.get("pinned", False)
+            try:
+                importance = int(importance)
             except (ValueError, TypeError):
-              importance = 5
+                importance = 5
             if importance >= 8 or pinned:
-              return self._format_output(content, metadata)
+                return self._format_output(content, metadata)
 
         # --- Check cache first ---
         # --- 先查缓存 ---
