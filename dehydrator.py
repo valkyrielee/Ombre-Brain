@@ -262,7 +262,7 @@ class Dehydrator:
         if metadata and isinstance(metadata, dict):
           importance = metadata.get("importance", 5)
           pinned = metadata.get("pinned", False)
-            try:
+          try:
               importance = int(importance)
             except (ValueError, TypeError):
               importance = 5
