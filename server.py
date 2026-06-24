@@ -31,6 +31,11 @@
 #   Remote: OMBRE_TRANSPORT=streamable-http python server.py
 #   Docker: docker-compose up
 # ============================================================
+# Redeploy marker 2026-06-25: force a clean rebuild of main HEAD. The live Zeabur
+# container had gone stale — it was serving an old build whose breath search still
+# excluded permanent buckets (an April-era behavior). Current main reaches them;
+# this comment exists only to trigger a fresh, successful build of the right code.
+# ============================================================
 
 import os
 import sys
