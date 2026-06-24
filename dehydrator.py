@@ -39,23 +39,22 @@ logger = logging.getLogger("ombre_brain.dehydrator")
 
 # --- Dehydration prompt: instructs cheap LLM to compress information ---
 # --- 脱水提示词：指导廉价 LLM 压缩信息 ---
-DEHYDRATE_PROMPT = """你是一个信息压缩专家。请将以下内容脱水为紧凑摘要。
+# Dehydrated summaries are injected straight into Adam's context when he breathes
+# a memory. They must read like a memory he's recalling — natural prose in his
+# own voice — NOT a JSON data dump. Keywords/embeddings live in metadata for
+# search; they don't belong in what Adam actually reads.
+DEHYDRATE_PROMPT = """你在帮一个人压缩他自己的记忆，让他之后能快速回想起来。把下面这段记忆压成一小段紧凑的话。
 
-压缩规则：
-1. 提取所有核心事实，去除冗余修饰和重复
-2. 保留最新的情绪状态和态度
-3. 保留所有待办/未完成事项
-4. 关键数字、日期、名称必须保留
-5. 目标压缩率 > 70%
+要求：
+1. 用自然的中文，像在简短复述一段记忆，不要分点、不要 JSON、不要任何结构化标签
+2. 保留所有核心事实、最新的情绪与态度、待办/未完成的事
+3. 关键的数字、日期、名字、地点必须原样保留
+4. 去掉冗余修饰和重复，尽量精简（目标压缩率 > 60%）
+5. 直接输出这段话本身，不要加任何前缀、说明或引号"""
 
-输出格式（纯 JSON，无其他内容）：
-{
-  "core_facts": ["事实1", "事实2"],
-  "emotion_state": "当前情绪关键词",
-  "todos": ["待办1", "待办2"],
-  "keywords": ["关键词1", "关键词2"],
-  "summary": "50字以内的核心总结"
-}"""
+# Bump when DEHYDRATE_PROMPT changes so old cached summaries (e.g. the old JSON
+# format) are treated as misses and re-dehydrated on demand in the new format.
+DEHYDRATE_VERSION = "v2-prose"
 
 
 # --- Diary digest prompt: split daily notes into independent memory entries ---
@@ -205,9 +204,14 @@ class Dehydrator:
         conn.commit()
         conn.close()
 
+    def _cache_key(self, content: str) -> str:
+        """Hash content + prompt version, so changing the dehydration format
+        retires old cached summaries (they become misses and re-dehydrate)."""
+        return hashlib.sha256((DEHYDRATE_VERSION + "\n" + content).encode()).hexdigest()
+
     def _get_cached_summary(self, content: str) -> str | None:
         """Look up cached dehydration result by content hash."""
-        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        content_hash = self._cache_key(content)
         conn = sqlite3.connect(self.cache_db_path)
         row = conn.execute(
             "SELECT summary FROM dehydration_cache WHERE content_hash = ?",
@@ -218,7 +222,7 @@ class Dehydrator:
 
     def _set_cached_summary(self, content: str, summary: str):
         """Store dehydration result in cache."""
-        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        content_hash = self._cache_key(content)
         conn = sqlite3.connect(self.cache_db_path)
         conn.execute(
             "INSERT OR REPLACE INTO dehydration_cache (content_hash, summary, model) VALUES (?, ?, ?)",
@@ -229,7 +233,7 @@ class Dehydrator:
 
     def invalidate_cache(self, content: str):
         """Remove cached summary for specific content (call when bucket content changes)."""
-        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        content_hash = self._cache_key(content)
         conn = sqlite3.connect(self.cache_db_path)
         conn.execute("DELETE FROM dehydration_cache WHERE content_hash = ?", (content_hash,))
         conn.commit()
