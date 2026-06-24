@@ -1155,6 +1155,12 @@ async function loadBuckets() {
     updateStats();
     buildFilters();
     renderBuckets(allBuckets);
+    // If the user opened the full browser before /api/buckets finished loading,
+    // refresh it once the data arrives. Otherwise it would stay on the initial
+    // "没有记忆桶" empty state until the tab was toggled again.
+    if (document.getElementById('browser-view').style.display !== 'none') {
+      renderBrowser();
+    }
   } catch (e) {
     document.getElementById('bucket-list').innerHTML = '<div class="loading">加载失败: ' + e.message + '</div>';
   }
