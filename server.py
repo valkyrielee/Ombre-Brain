@@ -314,6 +314,10 @@ async def health_check(request):
         stats = await bucket_mgr.get_stats()
         return JSONResponse({
             "status": "ok",
+            # Build marker: confirms which commit the live container is actually
+            # running. Bump this string in the same commit as any code change you
+            # need to verify reached production.
+            "build": "2026-06-25-breath-permanent-recall",
             "buckets": stats["permanent_count"] + stats["dynamic_count"],
             "decay_engine": "running" if decay_engine.is_running else "stopped",
         })
