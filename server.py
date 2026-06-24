@@ -726,10 +726,8 @@ async def breath(
 
     results = []
     token_used = 0
-    _diag = []  # TEMP: capture why buckets get skipped, surfaced via _diag_breath
     for bucket in matches:
         if token_used >= max_tokens:
-            _diag.append(f"{bucket['id']}: SKIP token_budget")
             break
         try:
             clean_meta = {k: v for k, v in bucket["metadata"].items() if k != "tags"}
@@ -742,7 +740,6 @@ async def breath(
             summary = await dehydrator.dehydrate(strip_wikilinks(bucket["content"]), clean_meta)
             summary_tokens = count_tokens_approx(summary)
             if token_used + summary_tokens > max_tokens:
-                _diag.append(f"{bucket['id']}: SKIP would-exceed tokens used={token_used} +{summary_tokens}")
                 break
             await bucket_mgr.touch(bucket["id"])
             if bucket.get("vector_match"):
@@ -752,11 +749,8 @@ async def breath(
             results.append(summary)
             token_used += summary_tokens
         except Exception as e:
-            import traceback as _tb
-            _diag.append(f"{bucket['id']}: EXC {type(e).__name__}: {e}")
-            logger.warning(f"Failed to dehydrate search result / 检索结果脱水失败: {bucket['id']}: {e!r}\n{_tb.format_exc()}")
+            logger.warning(f"Failed to dehydrate search result / 检索结果脱水失败: {e}")
             continue
-    globals()["_LAST_BREATH_DIAG"] = {"query": query, "matches": [b["id"] for b in matches], "diag": _diag, "results": len(results)}
 
     # --- Random surfacing: when search returns < 3, 40% chance to float old memories ---
     # --- 随机浮现：检索结果不足 3 条时，40% 概率从低权重旧桶里漂上来 ---
@@ -1406,16 +1400,6 @@ async def api_network(request):
         return JSONResponse({"nodes": nodes, "edges": edges})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
-
-
-@mcp.custom_route("/api/last-breath-diag", methods=["GET"])
-async def api_last_breath_diag(request):
-    """TEMP: return why the most recent breath() skipped buckets in the dehydrate
-    loop. Lets us see production-only failures (touch/dehydrate exceptions)."""
-    from starlette.responses import JSONResponse
-    err = _require_auth(request)
-    if err: return err
-    return JSONResponse(globals().get("_LAST_BREATH_DIAG", {"note": "no breath run yet"}))
 
 
 @mcp.custom_route("/api/breath-debug", methods=["GET"])
