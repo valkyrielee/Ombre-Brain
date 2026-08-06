@@ -9,6 +9,10 @@ mcp>=1.0.0
 # 模糊匹配（记忆桶搜索）
 rapidfuzz>=3.0.0
 
+# 繁简归一（只在检索打分时折叠，不改动任何桶文件）
+# 纯 Python、无 C 扩展、无外部数据文件，容器里装得上
+zhconv>=1.4.3
+
 # OpenAI 兼容客户端（支持 DeepSeek/Ollama/LM Studio/vLLM/Gemini 等任意兼容 API）
 openai>=1.0.0
 

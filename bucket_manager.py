@@ -30,6 +30,7 @@ import math
 import logging
 import shutil
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
@@ -39,6 +40,46 @@ from rapidfuzz import fuzz
 from utils import generate_bucket_id, sanitize_name, safe_path, now_iso
 
 logger = logging.getLogger("ombre_brain.bucket")
+
+# ------------------------------------------------------------------
+# Traditional/Simplified normalisation for SCORING ONLY
+# 繁简归一（只用于打分，不碰存储）
+#
+# _calc_topic_score compares characters. 「記憶」and「记忆」share none, so a
+# query in one script scores ~0 against a bucket written in the other, falls
+# below fuzzy_threshold, and never even enters the candidate list. The memory
+# is there; the door just doesn't open. This is not a ranking nicety — it is
+# the difference between recall and silence.
+#
+# Both sides are folded to Simplified before comparison. That direction is the
+# safe one: 繁→简 is many-to-one, so folding never invents a distinction that
+# wasn't there. Nothing on disk changes — buckets keep the exact script they
+# were written in, and every returned bucket is the untouched original.
+#
+# Falls back to identity if zhconv is missing, so a stale image degrades to
+# today's behaviour instead of crashing the search path.
+# ------------------------------------------------------------------
+try:
+    from zhconv import convert as _zh_convert
+except ImportError:  # pragma: no cover - depends on the image, not the logic
+    _zh_convert = None
+    logger.warning(
+        "zhconv not installed — Traditional/Simplified queries will not match "
+        "each other / 未安装 zhconv，繁简互查将失效"
+    )
+
+
+@lru_cache(maxsize=4096)
+def _fold_zh(text: str) -> str:
+    """Fold to Simplified for comparison. Cached: the same bucket bodies are
+    re-scored on every search, and conversion is the expensive part."""
+    if not text or _zh_convert is None:
+        return text
+    try:
+        return _zh_convert(text, "zh-hans")
+    except Exception as e:  # never let normalisation break retrieval
+        logger.warning(f"zh fold failed, comparing raw / 繁简归一失败: {e}")
+        return text
 
 
 class BucketManager:
@@ -553,22 +594,29 @@ class BucketManager:
         """
         meta = bucket.get("metadata", {})
 
-        name_score = fuzz.partial_ratio(query, meta.get("name", "")) * 3
+        # Every comparison happens in one script. Adam speaks 繁體 and a lot of
+        # the vault is written 简体 (and vice versa) — without this, asking about
+        # 「記憶」 simply cannot reach a bucket that says 「记忆」.
+        q = _fold_zh(query)
+
+        name_score = fuzz.partial_ratio(q, _fold_zh(meta.get("name", ""))) * 3
         domain_score = (
             max(
-                (fuzz.partial_ratio(query, d) for d in meta.get("domain", [])),
+                (fuzz.partial_ratio(q, _fold_zh(d)) for d in meta.get("domain", [])),
                 default=0,
             )
             * 2.5
         )
         tag_score = (
             max(
-                (fuzz.partial_ratio(query, tag) for tag in meta.get("tags", [])),
+                (fuzz.partial_ratio(q, _fold_zh(tag)) for tag in meta.get("tags", [])),
                 default=0,
             )
             * 2
         )
-        content_score = fuzz.partial_ratio(query, bucket.get("content", "")[:1000]) * self.content_weight
+        content_score = fuzz.partial_ratio(
+            q, _fold_zh(bucket.get("content", "")[:1000])
+        ) * self.content_weight
 
         return (name_score + domain_score + tag_score + content_score) / (100 * (3 + 2.5 + 2 + self.content_weight))
 
